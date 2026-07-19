@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>מיון חלבונים - משחק אינטראקטיבי</title>
+  <!-- Tailwind CSS to style outer containers nicely -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;800&display=swap');
+    body {
+      font-family: 'Assistant', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex flex-col items-center justify-center p-2 sm:p-4">
+
+  <!-- Main Container -->
+  <div class="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col items-center">
+    
+    <!-- Top Dashboard Header (Non-Canvas for better accessibility and style) -->
+    <div class="w-full bg-slate-950 border-b border-slate-800 p-4 flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/50 px-3 py-1.5 rounded-full border border-indigo-900/40">משימת מדעים: כיתה ט'</span>
+        <h1 class="text-lg sm:text-xl font-extrabold text-white">משחק מיון החלבונים: מבנה או פעולה?</h1>
+      </div>
+      <!-- Timer and Score Display -->
+      <div class="flex items-center gap-4">
+        <div id="timerDisplay" class="bg-rose-950/40 text-rose-400 border border-rose-900/40 px-3 py-1.5 rounded-lg font-bold text-sm sm:text-base flex items-center gap-2">
+          <span>⏱️</span> <span id="timerText">03:00</span>
+        </div>
+        <div id="scoreDisplay" class="bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 px-3 py-1.5 rounded-lg font-bold text-sm sm:text-base">
+          ניקוד: <span id="scoreText">0</span>/11
+        </div>
+      </div>
+    </div>
+
+    <!-- Start & Instruction Screen Overlay -->
+    <div id="startScreen" class="w-full p-6 sm:p-12 flex flex-col items-center text-center">
+      <div class="w-20 h-20 bg-indigo-500/10 border border-indigo-500/30 rounded-full flex items-center justify-center text-4xl mb-6 animate-pulse">
+        🧬
+      </div>
+      <h2 class="text-2xl sm:text-3xl font-extrabold text-indigo-300 mb-4">ברוכים הבאים לאתגר החלבונים!</h2>
+      <p class="text-slate-400 max-w-xl text-sm sm:text-base leading-relaxed mb-6">
+        לפניכם 11 חלבונים שונים המופיעים בגוף האדם. תפקידכם הוא: 
+        <strong class="text-sky-400">גררו כל חלבון לקטגוריה המתאימה: חלבוני מבנה או חלבוני פעולה</strong>.
+        יש לכם 3 דקות בדיוק להשלים את המיון בצורה מושלמת. בהצלחה!
+      </p>
+      <button onclick="startGame()" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition text-white px-8 py-3 rounded-xl font-bold text-base sm:text-lg shadow-lg shadow-indigo-600/30">
+        התחל משחק 🚀
+      </button>
+    </div>
+
+    <!-- Game Screen (Canvas Area) -->
+    <div id="gameScreen" class="w-full hidden relative flex flex-col items-center justify-center p-2">
+      <!-- Interactive Canvas -->
+      <canvas id="gameCanvas" width="800" height="500" class="w-full h-auto bg-slate-900/60 rounded-xl cursor-grab active:cursor-grabbing border border-slate-800/80"></canvas>
+      
+      <!-- Screen Toast Notifications -->
+      <div id="toastMessage" class="absolute top-4 left-1/2 transform -translate-x-1/2 px-6 py-2.5 rounded-xl font-bold text-base shadow-lg transition-all duration-300 opacity-0 pointer-events-none scale-90">
+        הודעה קצרה
+      </div>
+    </div>
+
+    <!-- End Game Screen -->
+    <div id="endScreen" class="w-full p-8 sm:p-12 hidden flex flex-col items-center text-center">
+      <div id="endEmoji" class="text-6xl mb-4">🏆</div>
+      <h2 id="endTitle" class="text-3xl font-extrabold text-white mb-2">כל הכבוד!</h2>
+      <p id="endSubtitle" class="text-slate-400 max-w-md mb-6"></p>
+      
+      <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-6 mb-8 w-full max-w-sm flex justify-around">
+        <div>
+          <div class="text-xs text-slate-500 font-bold uppercase mb-1">ניקוד סופי</div>
+          <div class="text-3xl font-black text-emerald-400"><span id="finalScore">0</span> מתוך 11</div>
+        </div>
+        <div class="border-l border-slate-800/80"></div>
+        <div>
+          <div class="text-xs text-slate-500 font-bold uppercase mb-1">זמן שנותר</div>
+          <div id="finalTime" class="text-3xl font-black text-indigo-400">00:00</div>
+        </div>
+      </div>
+
+      <button onclick="restartGame()" class="bg-slate-800 hover:bg-slate-700 transition border border-slate-700 text-white px-8 py-3 rounded-xl font-bold">
+        נסה שוב 🔄
+      </button>
+    </div>
+  </div>
+
+  <!-- Audio Context and Game Logic Script -->
+  <script>
+    // Audio Context Setup for Synthesized Sound Effects
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function playSound(type) {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'correct') {
+          osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+          osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.08); // E5
+          gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.25);
+        } else if (type === 'wrong') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+          osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.3);
+          gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.3);
+        } else if (type === 'win') {
+          const notes = [261.63, 329.63, 392.00, 523.25];
+          notes.forEach((freq, i) => {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.connect(g);
+            g.connect(audioCtx.destination);
+            o.frequency.setValueAtTime(freq, audioCtx.currentTime + i * 0.1);
+            g.gain.setValueAtTime(0.06, audioCtx.currentTime + i * 0.1);
+            g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.1 + 0.35);
+            o.start(audioCtx.currentTime + i * 0.1);
+            o.stop(audioCtx.currentTime + i * 0.1 + 0.35);
+          });
+        }
+      } catch (e) {
+        console.warn('Audio Context error:', e);
+      }
+    }
+
+    // Protein Data
+    const PROTEINS_DATA = [
+      { name: 'קולגן', category: 'structure' },
+      { name: 'קרטין', category: 'structure' },
+      { name: 'אלסטין', category: 'structure' },
+      { name: 'טובולין', category: 'structure' },
+      { name: 'אקטין', category: 'structure' },
+      { name: 'מיוזין', category: 'structure' },
+      { name: 'המוגלובין', category: 'action' },
+      { name: 'אינסולין', category: 'action' },
+      { name: 'עמילאז', category: 'action' },
+      { name: 'פפסין', category: 'action' },
+      { name: 'נוגדנים', category: 'action' }
+    ];
+
+    // Game Variables
+    let shuffledProteins = [];
+    let currentIdx = 0;
+    let score = 0;
+    let timerVal = 180; // 3 minutes in seconds
+    let timerInterval = null;
+    let isGameOver = false;
+    let animId = null;
+
+    // Canvas References
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Layout configuration inside 800x500 virtual coordinate space
+    const layout = {
+      binWidth: 230,
+      binHeight: 300,
+      binY: 140,
+      leftBinX: 50,
+      rightBinX: 520,
+      cardWidth: 180,
+      cardHeight: 110,
+      spawnX: 400, // Card Center X
+      spawnY: 290  // Card Center Y
+    };
+
+    // State of the current draggable card (Modified for entry animation)
+    let cardState = {
+      x: layout.spawnX,
+      y: -150, // Start high up offscreen
+      isDragging: false,
+      startX: 0,
+      startY: 0,
+      targetX: layout.spawnX,
+      targetY: layout.spawnY,
+      isEntering: true,
+      animStart: 0,
+      animDuration: 750 // Gentle 0.75-second entry transition (0.5s to 1s)
+    };
+
+    // Confetti System for Game Win Screen
+    let confettiArray = [];
+    function spawnConfetti() {
+      confettiArray = [];
+      const colors = ['#38bdf8', '#0284c7', '#f472b6', '#db2777', '#fbbf24', '#34d399'];
+      for (let i = 0; i < 80; i++) {
+        confettiArray.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * -100 - 10,
+          size: Math.random() * 8 + 5,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          speedX: Math.random() * 4 - 2,
+          speedY: Math.random() * 3 + 2,
+          rotation: Math.random() * 360,
+          rotSpeed: Math.random() * 4 - 2
+        });
+      }
+    }
+
+    // Setup and Start game
+    function startGame() {
+      initAudio();
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('gameScreen').classList.remove('hidden');
+      
+      shuffledProteins = [...PROTEINS_DATA].sort(() => Math.random() - 0.5);
+      currentIdx = 0;
+      score = 0;
+      timerVal = 180;
+      isGameOver = false;
+      confettiArray = [];
+
+      document.getElementById('scoreText').innerText = '0';
+      resetCard();
+      startTimer();
+      
+      // Stop any existing animation loop before starting a new one
+      if (animId) cancelAnimationFrame(animId);
+      animate();
+    }
+
+    function resetCard() {
+      cardState.x = layout.spawnX;
+      cardState.y = -150; // Place way above the visible canvas boundary
+      cardState.targetX = layout.spawnX;
+      cardState.targetY = layout.spawnY;
+      cardState.isDragging = false;
+      cardState.isEntering = true;
+      cardState.animStart = Date.now();
+    }
+
+    // Timer Implementation
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      updateTimerUI();
+      timerInterval = setInterval(() => {
+        timerVal--;
+        updateTimerUI();
+        if (timerVal <= 0) {
+          endGame(true); // End game due to timeout
+        }
+      }, 1000);
+    }
+
+    function updateTimerUI() {
+      const minutes = Math.floor(timerVal / 60);
+      const seconds = timerVal % 60;
+      const formatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      document.getElementById('timerText').innerText = formatted;
+      
+      const display = document.getElementById('timerDisplay');
+      if (timerVal <= 30) {
+        display.classList.add('animate-pulse', 'bg-rose-900', 'text-white');
+      } else {
+        display.classList.remove('animate-pulse', 'bg-rose-900', 'text-white');
+      }
+    }
+
+    // Dynamic Feedback Toast
+    function showToast(message, isCorrect) {
+      const toast = document.getElementById('toastMessage');
+      toast.innerText = message;
+      toast.className = `absolute top-4 left-1/2 transform -translate-x-1/2 px-6 py-2.5 rounded-xl font-bold text-base shadow-lg transition-all duration-300 pointer-events-none scale-100 opacity-100 ` + 
+        (isCorrect ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800');
+      
+      setTimeout(() => {
+        toast.classList.remove('opacity-100', 'scale-100');
+        toast.classList.add('opacity-0', 'scale-90');
+      }, 1200);
+    }
+
+    // Draw Rounded Rectangles easily
+    function drawRoundRect(c, x, y, w, h, radius, fill, stroke, strokeWidth) {
+      c.beginPath();
+      c.moveTo(x + radius, y);
+      c.lineTo(x + w - radius, y);
+      c.quadraticCurveTo(x + w, y, x + w, y + radius);
+      c.lineTo(x + w, y + h - radius);
+      c.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+      c.lineTo(x + radius, y + h);
+      c.quadraticCurveTo(x, y + h, x, y + h - radius);
+      c.lineTo(x, y + radius);
+      c.quadraticCurveTo(x, y, x + radius, y);
+      c.closePath();
+      if (fill) {
+        c.fillStyle = fill;
+        c.fill();
+      }
+      if (stroke) {
+        c.strokeStyle = stroke;
+        c.lineWidth = strokeWidth || 1;
+        c.stroke();
+      }
+    }
+
+    // Main Canvas Render Loop
+    function animate() {
+      if (isGameOver) {
+        renderEndConfetti();
+        animId = requestAnimationFrame(animate);
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Slide down card animation if entering, or smoothly reposition if dragging stops
+      if (cardState.isEntering) {
+        let elapsed = Date.now() - cardState.animStart;
+        let t = Math.min(elapsed / cardState.animDuration, 1);
+        
+        // Elegant Cubic Ease-Out curve for a smooth, gentle deceleration and stop
+        let ease = 1 - Math.pow(1 - t, 3);
+        
+        cardState.y = -150 + (cardState.targetY - (-150)) * ease;
+        cardState.x = layout.spawnX;
+        
+        if (t >= 1) {
+          cardState.isEntering = false;
+          cardState.y = cardState.targetY;
+        }
+      } else if (!cardState.isDragging) {
+        cardState.x += (cardState.targetX - cardState.x) * 0.15;
+        cardState.y += (cardState.targetY - cardState.y) * 0.15;
+      }
+
+      // Check for overlap of card center with left/right bins
+      const cardCenterX = cardState.x;
+      const cardCenterY = cardState.y;
+
+      let isLeftOverlapped = (
+        cardCenterX > layout.leftBinX && 
+        cardCenterX < layout.leftBinX + layout.binWidth &&
+        cardCenterY > layout.binY && 
+        cardCenterY < layout.binY + layout.binHeight
+      );
+
+      let isRightOverlapped = (
+        cardCenterX > layout.rightBinX && 
+        cardCenterX < layout.rightBinX + layout.binWidth &&
+        cardCenterY > layout.binY && 
+        cardCenterY < layout.binY + layout.binHeight
+      );
+
+      // Draw Left Bin (חלבוני מבנה)
+      const leftGrad = ctx.createLinearGradient(layout.leftBinX, layout.binY, layout.leftBinX, layout.binY + layout.binHeight);
+      leftGrad.addColorStop(0, isLeftOverlapped ? '#0c4a6e' : '#072b43');
+      leftGrad.addColorStop(1, '#021526');
+      drawRoundRect(ctx, layout.leftBinX, layout.binY, layout.binWidth, layout.binHeight, 18, leftGrad, isLeftOverlapped ? '#38bdf8' : '#0284c7', isLeftOverlapped ? 3 : 1.5);
+      
+      // Draw Right Bin (חלבוני פעולה)
+      const rightGrad = ctx.createLinearGradient(layout.rightBinX, layout.binY, layout.rightBinX, layout.binY + layout.binHeight);
+      rightGrad.addColorStop(0, isRightOverlapped ? '#4c0519' : '#310312');
+      rightGrad.addColorStop(1, '#1b020a');
+      drawRoundRect(ctx, layout.rightBinX, layout.binY, layout.binWidth, layout.binHeight, 18, rightGrad, isRightOverlapped ? '#f472b6' : '#db2777', isRightOverlapped ? 3 : 1.5);
+
+      // Draw Bin Text Labels
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Structural Bin Texts
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px Assistant';
+      ctx.fillText('חלבוני מבנה', layout.leftBinX + layout.binWidth / 2, layout.binY + 50);
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '14px Assistant';
+      ctx.fillText('(סיבים, יציבות ותנועה)', layout.leftBinX + layout.binWidth / 2, layout.binY + 80);
+      
+      // Functional Bin Texts
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px Assistant';
+      ctx.fillText('חלבוני פעולה', layout.rightBinX + layout.binWidth / 2, layout.binY + 50);
+      ctx.fillStyle = '#f472b6';
+      ctx.font = '14px Assistant';
+      ctx.fillText('(הובלה, אנזימים והגנה)', layout.rightBinX + layout.binWidth / 2, layout.binY + 80);
+
+      // Draw Basket Wireframes / Icons decoration
+      ctx.font = '60px Assistant';
+      ctx.fillText('🏗️', layout.leftBinX + layout.binWidth / 2, layout.binY + 180);
+      ctx.fillText('⚙️', layout.rightBinX + layout.binWidth / 2, layout.binY + 180);
+
+      // Draw Current Active Drag Card (Only one shown at a time)
+      if (currentIdx < shuffledProteins.length) {
+        const currentProtein = shuffledProteins[currentIdx];
+        
+        // Draw card shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetY = 6;
+        
+        // Draw card background (Clean white-grey gradient)
+        const cardGrad = ctx.createLinearGradient(cardState.x - layout.cardWidth/2, cardState.y - layout.cardHeight/2, cardState.x - layout.cardWidth/2, cardState.y + layout.cardHeight/2);
+        cardGrad.addColorStop(0, '#ffffff');
+        cardGrad.addColorStop(1, '#e2e8f0');
+        
+        drawRoundRect(ctx, cardState.x - layout.cardWidth / 2, cardState.y - layout.cardHeight / 2, layout.cardWidth, layout.cardHeight, 14, cardGrad, '#cbd5e1', 2);
+        
+        // Reset Shadow for next renders
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Draw Protein text inside card
+        ctx.fillStyle = '#0f172a'; // Deep Navy Slate
+        ctx.font = 'extrabold 28px Assistant';
+        ctx.fillText(currentProtein.name, cardState.x, cardState.y);
+      }
+
+      animId = requestAnimationFrame(animate);
+    }
+
+    // Render Confetti on GameOver
+    function renderEndConfetti() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw background text
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 20px Assistant';
+      ctx.textAlign = 'center';
+      ctx.fillText('השלמת את האתגר! חקור תוצאות למעלה', canvas.width / 2, canvas.height / 2 - 50);
+
+      // Update and draw confetti pieces
+      confettiArray.forEach(p => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rotation * Math.PI) / 180);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        ctx.restore();
+
+        p.y += p.speedY;
+        p.x += p.speedX;
+        p.rotation += p.rotSpeed;
+
+        // Loop confetti
+        if (p.y > canvas.height) {
+          p.y = -10;
+          p.x = Math.random() * canvas.width;
+        }
+      });
+    }
+
+    // Interaction / Touch & Mouse Events logic
+    function getCanvasCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      let clientX, clientY;
+      if (e.touches && e.touches[0]) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+
+    function checkDragStart(coords) {
+      // Prevent interactions during entry transition or when game is finished
+      if (currentIdx >= shuffledProteins.length || isGameOver || cardState.isEntering) return;
+      
+      const halfW = layout.cardWidth / 2;
+      const halfH = layout.cardHeight / 2;
+
+      // Check if clicking inside card bounds
+      if (coords.x > cardState.x - halfW && coords.x < cardState.x + halfW &&
+          coords.y > cardState.y - halfH && coords.y < cardState.y + halfH) {
+        initAudio(); // Initialize audio context on first user action
+        cardState.isDragging = true;
+        cardState.startX = coords.x - cardState.x;
+        cardState.startY = coords.y - cardState.y;
+      }
+    }
+
+    function handleDrag(coords) {
+      if (cardState.isDragging) {
+        cardState.x = coords.x - cardState.startX;
+        cardState.y = coords.y - cardState.startY;
+      }
+    }
+
+    function handleDragRelease() {
+      if (!cardState.isDragging) return;
+      cardState.isDragging = false;
+
+      const cardCenterX = cardState.x;
+      const cardCenterY = cardState.y;
+
+      const leftBinBounds = {
+        x1: layout.leftBinX,
+        y1: layout.binY,
+        x2: layout.leftBinX + layout.binWidth,
+        y2: layout.binY + layout.binHeight
+      };
+
+      const rightBinBounds = {
+        x1: layout.rightBinX,
+        y1: layout.binY,
+        x2: layout.rightBinX + layout.binWidth,
+        y2: layout.binY + layout.binHeight
+      };
+
+      // Evaluate drop zones
+      if (cardCenterX > leftBinBounds.x1 && cardCenterX < leftBinBounds.x2 &&
+          cardCenterY > leftBinBounds.y1 && cardCenterY < leftBinBounds.y2) {
+        evaluateDrop('structure');
+      } 
+      else if (cardCenterX > rightBinBounds.x1 && cardCenterX < rightBinBounds.x2 &&
+               cardCenterY > rightBinBounds.y1 && cardCenterY < rightBinBounds.y2) {
+        evaluateDrop('action');
+      } 
+      else {
+        // Return back to center with spring transition if missed
+        cardState.targetX = layout.spawnX;
+        cardState.targetY = layout.spawnY;
+      }
+    }
+
+    function evaluateDrop(droppedCategory) {
+      const p = shuffledProteins[currentIdx];
+      
+      if (p.category === droppedCategory) {
+        // Correct Choice
+        score++;
+        document.getElementById('scoreText').innerText = score;
+        playSound('correct');
+        showToast('נכון מאוד! 🎉', true);
+      } else {
+        // Incorrect Choice
+        playSound('wrong');
+        showToast('לא נכון... ❌', false);
+      }
+
+      currentIdx++;
+      if (currentIdx < shuffledProteins.length) {
+        // Prepare next card with drop-in animation
+        resetCard();
+      } else {
+        endGame(false); // Game ended natively (out of cards)
+      }
+    }
+
+    // End Game Handler
+    function endGame(isTimeout) {
+      isGameOver = true;
+      clearInterval(timerInterval);
+      
+      document.getElementById('gameScreen').classList.add('hidden');
+      document.getElementById('endScreen').classList.remove('hidden');
+      
+      // Calculate final score details
+      document.getElementById('finalScore').innerText = score;
+      
+      const secondsLeft = timerVal;
+      const finalTimeText = (secondsLeft > 0) ? document.getElementById('timerText').innerText : "00:00";
+      document.getElementById('finalTime').innerText = finalTimeText;
+
+      // Customize messages based on performance
+      const endTitle = document.getElementById('endTitle');
+      const endSubtitle = document.getElementById('endSubtitle');
+      const endEmoji = document.getElementById('endEmoji');
+
+      if (isTimeout) {
+        endEmoji.innerText = '⏱️';
+        endTitle.innerText = 'נגמר הזמן!';
+        endSubtitle.innerText = 'ניסיון נהדר, אך 3 דקות עברו במהירות. נסה שוב כדי לשפר את הניקוד והזמן שלך!';
+      } else if (score === 11) {
+        endEmoji.innerText = '🏆';
+        endTitle.innerText = 'שלמות! מומחה חלבונים!';
+        endSubtitle.innerText = 'מצוין! סיווגת את כל 11 החלבונים ללא טעות אחת. הישג נפלא!';
+        playSound('win');
+        spawnConfetti();
+      } else if (score >= 8) {
+        endEmoji.innerText = '🌟';
+        endTitle.innerText = 'כל הכבוד!';
+        endSubtitle.innerText = 'תוצאה מצוינת! אתה מבין היטב את ההבדל בין חלבוני מבנה לחלבוני פעולה.';
+        playSound('win');
+        spawnConfetti();
+      } else {
+        endEmoji.innerText = '📚';
+        endTitle.innerText = 'המשך להתאמן!';
+        endSubtitle.innerText = 'הבנה טובה של הבסיס. כדאי לעבור שוב על תפקוד החלבונים ולשחק שוב!';
+      }
+    }
+
+    // Restart game easily
+    function restartGame() {
+      document.getElementById('endScreen').classList.add('hidden');
+      startGame();
+    }
+
+    // Mouse Listeners
+    canvas.addEventListener('mousedown', e => {
+      checkDragStart(getCanvasCoords(e));
+    });
+    canvas.addEventListener('mousemove', e => {
+      handleDrag(getCanvasCoords(e));
+    });
+    window.addEventListener('mouseup', () => {
+      handleDragRelease();
+    });
+
+    // Touch Listeners for mobile/iPad responsiveness
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      checkDragStart(getCanvasCoords(e));
+    }, { passive: false });
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      handleDrag(getCanvasCoords(e));
+    }, { passive: false });
+    window.addEventListener('touchend', () => {
+      handleDragRelease();
+    });
+  </script>
+</body>
+</html>
