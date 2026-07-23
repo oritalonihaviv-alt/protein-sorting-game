@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧬 משחק מיון החלבונים: מבנה או פעולה?</title>
+    <!-- Tailwind CSS for modern responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for premium typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Rubik', 'sans-serif'],
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        /* Modern organic gradients for the background */
+        body {
+            background: radial-gradient(circle at top right, rgba(239, 246, 255, 0.9), transparent),
+                        radial-gradient(circle at bottom left, rgba(236, 253, 245, 0.9), transparent),
+                        #f8fafc;
+        }
+        /* Custom touch-action and transitions for the active draggable card */
+        .interactive-card {
+            touch-action: none;
+            user-select: none;
+            will-change: transform;
+            cursor: grab;
+        }
+        .interactive-card:active {
+            cursor: grabbing;
+        }
+        /* Smooth scale animation on targets when hovered */
+        .drag-target {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Highlight styling when dragging over a valid target zone */
+        .target-active {
+            transform: scale(1.04);
+            border-color: #10b981 !important;
+            background-color: rgba(209, 250, 229, 0.45) !important;
+            box-shadow: 0 12px 30px -10px rgba(16, 185, 129, 0.25);
+        }
+        /* Shake animation for incorrect answer */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-12px); }
+            40%, 80% { transform: translateX(12px); }
+        }
+        .shake-animation {
+            animation: shake 0.4s ease-in-out;
+        }
+    </style>
+</head>
+<body class="font-sans text-slate-800 h-full flex flex-col justify-between overflow-hidden antialiased">
+
+    <!-- Main Outer Container - Scaled to fit Google Sites and iframe embed boundaries smoothly -->
+    <div class="flex-1 flex flex-col items-center justify-center p-4 min-h-[580px] w-full max-w-lg sm:max-w-xl mx-auto">
+        
+        <!-- Elevated Active Glassmorphism Game Card -->
+        <div class="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-100 p-6 w-full flex flex-col justify-between min-h-[520px] relative overflow-hidden">
+            
+            <!-- HEADER BAR -->
+            <div class="text-center pb-3">
+                <h1 class="text-2xl sm:text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent flex items-center justify-center gap-2 mb-1.5">
+                    <span>🧬</span> משחק מיון החלבונים
+                </h1>
+                <p id="game-instructions" class="text-xs sm:text-sm text-slate-500 font-medium">
+                    גררו כל חלבון אל הקטגוריה המתאימה בתחתית.
+                </p>
+            </div>
+
+            <!-- START SCREEN (Displayed on Initialization) -->
+            <div id="screen-start" class="flex-1 flex flex-col justify-center items-center gap-6 py-6">
+                <div class="bg-gradient-to-br from-blue-50/70 to-emerald-50/70 p-5 rounded-2xl border border-blue-100/50 text-center shadow-inner max-w-sm">
+                    <p class="text-sm sm:text-base text-slate-600 leading-relaxed font-medium">
+                        לפניכם 10 חלבונים שונים המופיעים בכל פעם ככרטיס אחד בחלק העליון. <br>
+                        עליכם לתפוס את הכרטיס, לגרור אותו **מטה** ולמיין אותו לקטגוריה הנכונה:
+                        <strong class="text-emerald-700 block mt-3 text-base sm:text-lg">🧱 חלבוני מבנה או ⚙️ חלבוני פעולה</strong>
+                    </p>
+                </div>
+                <button id="btn-start" onclick="startGame()" class="px-10 py-4 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-700 hover:to-emerald-700 text-white font-bold text-xl rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 select-none">
+                    ▶ התחל משחק
+                </button>
+            </div>
+
+            <!-- PLAY SCREEN AREA (Hidden initially) -->
+            <div id="screen-play" class="hidden flex-1 flex flex-col justify-between mt-2 gap-4">
+                
+                <!-- Info & Scoreboard Strip -->
+                <div class="flex justify-between items-center bg-slate-50 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold text-slate-600 border border-slate-100 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">⭐</span>
+                        <span>ניקוד:</span>
+                        <span id="score-val" class="text-blue-600 font-extrabold text-base">0 / 10</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">⏱</span>
+                        <span>זמן:</span>
+                        <span id="timer-val" class="font-extrabold text-slate-800 font-mono text-base">00:00</span>
+                    </div>
+                </div>
+
+                <!-- Central Spawning Area (Holds active card in the upper third portion) -->
+                <div class="relative flex justify-center items-center min-h-[160px] sm:min-h-[190px] w-full">
+                    
+                    <!-- Floating visual reaction bubbles -->
+                    <div id="feedback-bubble" class="absolute -top-2 opacity-0 scale-95 transition-all duration-300 z-20 px-6 py-2.5 rounded-full font-bold text-sm shadow-lg pointer-events-none">
+                        כל הכבוד!
+                    </div>
+
+                    <!-- Single Card Spawner Anchor -->
+                    <div id="card-holder" class="w-64 h-36 sm:w-72 sm:h-40 flex justify-center items-center relative">
+                        
+                        <!-- Interactive Active Card -->
+                        <div id="active-card" class="interactive-card w-full h-full bg-white rounded-2xl shadow-xl border border-slate-200/85 p-5 flex flex-col justify-between items-center relative select-none z-10 transition-shadow">
+                            <div class="absolute top-3 left-3 text-lg text-slate-300 select-none font-bold">🧬</div>
+                            <div class="flex-1 flex items-center justify-center text-center">
+                                <span id="protein-name" class="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">קולגן</span>
+                            </div>
+                            <div class="text-[10px] sm:text-xs text-slate-400 font-bold tracking-wider select-none animate-bounce">גררו מטה ⬇</div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Targeted Dropping Zones (Side by side in the bottom half) -->
+                <div class="grid grid-cols-2 gap-4 mt-2">
+                    
+                    <!-- Structural Protein Zone -->
+                    <div id="target-structural" class="drag-target border-2 border-dashed border-slate-300 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[120px] sm:min-h-[130px] bg-slate-50/50 text-center select-none shadow-sm">
+                        <span class="text-3xl sm:text-4xl mb-2">🧱</span>
+                        <h3 class="font-extrabold text-base sm:text-lg text-slate-700">חלבוני מבנה</h3>
+                        <p class="text-[10px] sm:text-xs text-slate-400 mt-1 font-medium">בוני רקמות ויציבות</p>
+                    </div>
+
+                    <!-- Active/Functional Protein Zone -->
+                    <div id="target-active" class="drag-target border-2 border-dashed border-slate-300 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[120px] sm:min-h-[130px] bg-slate-50/50 text-center select-none shadow-sm">
+                        <span class="text-3xl sm:text-4xl mb-2">⚙️</span>
+                        <h3 class="font-extrabold text-base sm:text-lg text-slate-700">חלבוני פעולה</h3>
+                        <p class="text-[10px] sm:text-xs text-slate-400 mt-1 font-medium">אנזימים, הובלה והגנה</p>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- END SCREEN (Displayed on Finished) -->
+            <div id="screen-end" class="hidden flex-1 flex flex-col justify-center items-center text-center gap-6 py-6">
+                <div class="text-6xl animate-bounce">🎉</div>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800">כל הכבוד! סיימתם את המשחק.</h2>
+                
+                <div class="bg-gradient-to-r from-blue-50/50 to-emerald-50/50 px-8 py-5 rounded-2xl border border-slate-100 flex gap-8 shadow-inner">
+                    <div class="flex flex-col items-center">
+                        <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">הניקוד שלכם</span>
+                        <span id="final-score" class="text-2xl sm:text-3xl font-extrabold text-blue-600">0 / 10</span>
+                    </div>
+                    <div class="border-l border-slate-200"></div>
+                    <div class="flex flex-col items-center">
+                        <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">זמן משחק</span>
+                        <span id="final-time" class="text-2xl sm:text-3xl font-extrabold text-emerald-600">00:00</span>
+                    </div>
+                </div>
+
+                <button onclick="restartGame()" class="px-8 py-3.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2 select-none">
+                    <span>🔄</span> שחקו שוב
+                </button>
+            </div>
+
+            <!-- Simple UI branding footer -->
+            <div class="text-center text-[10px] text-slate-300 border-t border-slate-100 pt-3 select-none font-medium">
+                משחק רספונסיבי מותאם להטמעה ב-Google Sites
+            </div>
+        </div>
+    </div>
+
+    <!-- AUDIO INTERACTION SYNTH (Fully self-sufficient synthesized game sounds) -->
+    <script>
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playBeep(type) {
+            initAudio();
+            if (!audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'correct') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.08); // E5
+                osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.16); // G5
+                gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.35);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(130, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.25);
+                gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.28);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.28);
+            } else if (type === 'victory') {
+                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99];
+                notes.forEach((freq, idx) => {
+                    const localOsc = audioCtx.createOscillator();
+                    const localGain = audioCtx.createGain();
+                    localOsc.connect(localGain);
+                    localGain.connect(audioCtx.destination);
+                    localOsc.type = 'triangle';
+                    localOsc.frequency.setValueAtTime(freq, audioCtx.currentTime + idx * 0.08);
+                    localGain.gain.setValueAtTime(0.08, audioCtx.currentTime + idx * 0.08);
+                    localGain.gain.exponentialRampToValueAtTime(0.005, audioCtx.currentTime + idx * 0.08 + 0.25);
+                    localOsc.start(audioCtx.currentTime + idx * 0.08);
+                    localOsc.stop(audioCtx.currentTime + idx * 0.08 + 0.25);
+                });
+            }
+        }
+    </script>
+
+    <!-- CORE GAME ENGINE -->
+    <script>
+        const PROTEINS = [
+            // Structural Proteins
+            { name: 'קולגן', category: 'structural' },
+            { name: 'קרטין', category: 'structural' },
+            { name: 'אלסטין', category: 'structural' },
+            { name: 'טובולין', category: 'structural' },
+            // Functional/Active Proteins
+            { name: 'המוגלובין', category: 'active' },
+            { name: 'אינסולין', category: 'active' },
+            { name: 'עמילאז', category: 'active' },
+            { name: 'פפסין', category: 'active' },
+            { name: 'נוגדנים', category: 'active' },
+            { name: 'מיוזין', category: 'active' }
+        ];
+
+        let gameDeck = [];
+        let currentIdx = 0;
+        let score = 0;
+        let timer = null;
+        let secondsPassed = 0;
+
+        // Pointer drag parameters
+        let activeDrag = false;
+        let pointerId = null;
+        let startX = 0;
+        let startY = 0;
+        let currentX = 0;
+        let currentY = 0;
+        let activeCardEl = null;
+
+        // Shuffle Utility
+        function shuffle(array) {
+            const copy = [...array];
+            for (let i = copy.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [copy[i], copy[j]] = [copy[j], copy[i]];
+            }
+            return copy;
+        }
+
+        // Game state controllers
+        function startGame() {
+            initAudio();
+            document.getElementById('screen-start').classList.add('hidden');
+            document.getElementById('screen-play').classList.remove('hidden');
+            document.getElementById('screen-end').classList.add('hidden');
+
+            gameDeck = shuffle(PROTEINS);
+            currentIdx = 0;
+            score = 0;
+            secondsPassed = 0;
+
+            document.getElementById('score-val').innerText = `0 / ${gameDeck.length}`;
+            resetTimer();
+            runTimer();
+            
+            spawnCard();
+        }
+
+        function spawnCard() {
+            if (currentIdx >= gameDeck.length) {
+                finishGame();
+                return;
+            }
+
+            const cardData = gameDeck[currentIdx];
+            document.getElementById('protein-name').innerText = cardData.name;
+
+            activeCardEl = document.getElementById('active-card');
+            activeCardEl.style.transform = 'translate3d(0px, 0px, 0px)';
+            activeCardEl.style.transition = 'none';
+            activeCardEl.className = "interactive-card w-full h-full bg-white rounded-2xl shadow-xl border border-slate-200/85 p-5 flex flex-col justify-between items-center relative select-none z-10 transition-all";
+
+            // Attach clean Pointer Down event listener
+            activeCardEl.addEventListener('pointerdown', onPointerDown);
+        }
+
+        // Pointer event implementations for universal touch/mouse dragging
+        function onPointerDown(e) {
+            initAudio();
+            if (activeDrag) return;
+
+            activeDrag = true;
+            pointerId = e.pointerId;
+            activeCardEl.setPointerCapture(pointerId);
+
+            startX = e.clientX;
+            startY = e.clientY;
+
+            activeCardEl.style.transition = 'none';
+            activeCardEl.classList.remove('shadow-xl');
+            activeCardEl.classList.add('shadow-2xl', 'scale-105', 'ring-2', 'ring-blue-100');
+
+            activeCardEl.addEventListener('pointermove', onPointerMove);
+            activeCardEl.addEventListener('pointerup', onPointerUp);
+            activeCardEl.addEventListener('pointercancel', onPointerCancel);
+        }
+
+        function onPointerMove(e) {
+            if (!activeDrag || e.pointerId !== pointerId) return;
+
+            currentX = e.clientX - startX;
+            currentY = e.clientY - startY;
+
+            // Restrict X scaling to emphasize pulling downwards to categorise
+            const boundedX = currentX * 0.55;
+
+            activeCardEl.style.transform = `translate3d(${boundedX}px, ${currentY}px, 0px)`;
+
+            detectCollision(boundedX, currentY);
+        }
+
+        // Dynamic element collision tracking
+        function detectCollision(x, y) {
+            const cardRect = activeCardEl.getBoundingClientRect();
+            const cardCenterX = cardRect.left + cardRect.width / 2;
+            const cardCenterY = cardRect.top + cardRect.height / 2;
+
+            const structuralEl = document.getElementById('target-structural');
+            const activeEl = document.getElementById('target-active');
+
+            const structuralRect = structuralEl.getBoundingClientRect();
+            const activeRect = activeEl.getBoundingClientRect();
+
+            // Intersects with Structural zone
+            if (
+                cardCenterX > structuralRect.left && cardCenterX < structuralRect.right &&
+                cardCenterY > structuralRect.top && cardCenterY < structuralRect.bottom
+            ) {
+                structuralEl.classList.add('target-active');
+                activeEl.classList.remove('target-active');
+            }
+            // Intersects with Functional/Active zone
+            else if (
+                cardCenterX > activeRect.left && cardCenterX < activeRect.right &&
+                cardCenterY > activeRect.top && cardCenterY < activeRect.bottom
+            ) {
+                activeEl.classList.add('target-active');
+                structuralEl.classList.remove('target-active');
+            }
+            // None of the above
+            else {
+                structuralEl.classList.remove('target-active');
+                activeEl.classList.remove('target-active');
+            }
+        }
+
+        function onPointerUp(e) {
+            if (!activeDrag || e.pointerId !== pointerId) return;
+            activeDrag = false;
+
+            activeCardEl.releasePointerCapture(pointerId);
+            activeCardEl.removeEventListener('pointermove', onPointerMove);
+            activeCardEl.removeEventListener('pointerup', onPointerUp);
+            activeCardEl.removeEventListener('pointercancel', onPointerCancel);
+
+            activeCardEl.classList.remove('shadow-2xl', 'scale-105', 'ring-2', 'ring-blue-100');
+            activeCardEl.classList.add('shadow-xl');
+
+            // Collision check positions
+            const cardRect = activeCardEl.getBoundingClientRect();
+            const cardCenterX = cardRect.left + cardRect.width / 2;
+            const cardCenterY = cardRect.top + cardRect.height / 2;
+
+            const structuralEl = document.getElementById('target-structural');
+            const activeEl = document.getElementById('target-active');
+
+            const structuralRect = structuralEl.getBoundingClientRect();
+            const activeRect = activeEl.getBoundingClientRect();
+
+            let targetCat = null;
+
+            if (
+                cardCenterX > structuralRect.left && cardCenterX < structuralRect.right &&
+                cardCenterY > structuralRect.top && cardCenterY < structuralRect.bottom
+            ) {
+                targetCat = 'structural';
+            } else if (
+                cardCenterX > activeRect.left && cardCenterX < activeRect.right &&
+                cardCenterY > activeRect.top && cardCenterY < activeRect.bottom
+            ) {
+                targetCat = 'active';
+            }
+
+            structuralEl.classList.remove('target-active');
+            activeEl.classList.remove('target-active');
+
+            const actualCat = gameDeck[currentIdx].category;
+
+            if (targetCat === actualCat) {
+                matchSuccess();
+            } else if (targetCat !== null) {
+                matchFail();
+            } else {
+                returnCardToTop();
+            }
+        }
+
+        function onPointerCancel(e) {
+            activeDrag = false;
+            returnCardToTop();
+        }
+
+        function returnCardToTop() {
+            activeCardEl.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            activeCardEl.style.transform = 'translate3d(0px, 0px, 0px)';
+        }
+
+        // Feedback response handlers
+        function matchSuccess() {
+            playBeep('correct');
+            score++;
+            document.getElementById('score-val').innerText = `${score} / ${gameDeck.length}`;
+
+            activeCardEl.classList.remove('border-slate-200/85');
+            activeCardEl.classList.add('border-emerald-500', 'bg-emerald-50/50');
+
+            const feedback = document.getElementById('feedback-bubble');
+            feedback.innerText = "כל הכבוד! ✅";
+            feedback.className = "absolute -top-2 opacity-100 scale-100 transition-all duration-300 z-20 px-6 py-2.5 rounded-full font-bold text-sm shadow-md bg-emerald-500 text-white";
+
+            // Prevent further drag inputs during animations
+            activeCardEl.removeEventListener('pointerdown', onPointerDown);
+
+            currentIdx++;
+            setTimeout(() => {
+                feedback.className = "absolute -top-2 opacity-0 scale-95 transition-all duration-300 z-20 px-6 py-2.5 rounded-full font-bold text-sm pointer-events-none";
+                spawnCard();
+            }, 1100);
+        }
+
+        function matchFail() {
+            playBeep('wrong');
+
+            activeCardEl.classList.remove('border-slate-200/85');
+            activeCardEl.classList.add('border-rose-500', 'bg-rose-50/50');
+
+            const feedback = document.getElementById('feedback-bubble');
+            feedback.innerText = "נסו שוב ❌";
+            feedback.className = "absolute -top-2 opacity-100 scale-100 transition-all duration-300 z-20 px-6 py-2.5 rounded-full font-bold text-sm shadow-md bg-rose-500 text-white";
+
+            // Shake & Return Animation
+            activeCardEl.classList.add('shake-animation');
+
+            setTimeout(() => {
+                activeCardEl.classList.remove('shake-animation');
+                activeCardEl.classList.remove('border-rose-500', 'bg-rose-50/50');
+                activeCardEl.classList.add('border-slate-200/85');
+                feedback.className = "absolute -top-2 opacity-0 scale-95 transition-all duration-300 z-20 px-6 py-2.5 rounded-full font-bold text-sm pointer-events-none";
+                returnCardToTop();
+            }, 400);
+        }
+
+        // Game Termination
+        function finishGame() {
+            clearInterval(timer);
+            playBeep('victory');
+
+            document.getElementById('screen-play').classList.add('hidden');
+            document.getElementById('screen-end').classList.remove('hidden');
+
+            document.getElementById('final-score').innerText = `${score} מתוך ${gameDeck.length}`;
+            
+            const minutes = Math.floor(secondsPassed / 60).toString().padStart(2, '0');
+            const seconds = (secondsPassed % 60).toString().padStart(2, '0');
+            document.getElementById('final-time').innerText = `${minutes}:${seconds}`;
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        // Active timers
+        function runTimer() {
+            timer = setInterval(() => {
+                secondsPassed++;
+                const mins = Math.floor(secondsPassed / 60).toString().padStart(2, '0');
+                const secs = (secondsPassed % 60).toString().padStart(2, '0');
+                document.getElementById('timer-val').innerText = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function resetTimer() {
+            clearInterval(timer);
+            secondsPassed = 0;
+            document.getElementById('timer-val').innerText = '00:00';
+        }
+    </script>
+</body>
+</html>
